@@ -49,7 +49,7 @@ export default function CustodianLogin() {
     setMethodsBusy(true); setMobileError('');
     try {
       const res = await adminAuth.loginMethods({ mobile_number: `+91${mobile}` });
-      const hasTotp = !!(res && (res.totp === true || res.totpEnabled === true || (Array.isArray(res.methods) && res.methods.includes('totp'))));
+      const hasTotp = !!(res && (res.totp_enabled === true || res.totp === true || res.totpEnabled === true || (Array.isArray(res.methods) && res.methods.includes('totp'))));
       setTotpAvailable(hasTotp);
       setTab('mpin');
       setStage('methods');

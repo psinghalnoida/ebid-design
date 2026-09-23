@@ -1,9 +1,14 @@
 // Low-level HTTP client for the CI4 backend (psinghalnoida/ebid.oreo).
 //
 // Response conventions taken from the CI4 controllers:
-//   • success → 2xx with a plain JSON object (no envelope)
-//   • failure → 4xx/5xx with { error, error_description }
+//   • every JSON response is wrapped as { status, message, data }
+//     (App\Libraries\ApiResponse) — the real payload sits under `data`
+//   • failure → 4xx/5xx, with the short code at data.error and the
+//     human-readable text at the top-level `message`
 //   • CSV exports → raw text/csv body with Content-Disposition
+//
+// request() unwraps the envelope, so callers keep receiving the plain
+// payload and ApiError keeps its (code, description) shape.
 //
 // Auth is a user-scoped JWT sent as `Authorization: Bearer <token>`
 // (app/Filters/JwtAuthFilter.php). Logout is client-side only — the
@@ -89,10 +94,21 @@ async function request(method, path, { body, query, auth = true, raw = false, si
     try { data = JSON.parse(text); } catch (e) { data = { raw: text }; }
   }
 
+  const envelope = isEnvelope(data) ? data : null;
+  const result = envelope ? envelope.data : data;
+
   if (!res.ok) {
-    throw new ApiError(res.status, (data && data.error) || 'request_failed', (data && data.error_description) || (data && data.message) || null, data);
+    const inner = result && typeof result === 'object' ? result : {};
+    const code = inner.error || (data && data.error) || 'request_failed';
+    const description = inner.error_description || (envelope && envelope.message) || (data && data.error_description) || (data && data.message) || null;
+    throw new ApiError(res.status, code, description, result);
   }
-  return data;
+  return result;
+}
+
+function isEnvelope(body) {
+  return !!body && typeof body === 'object' && !Array.isArray(body)
+    && typeof body.status === 'boolean' && 'data' in body;
 }
 
 export const api = {
